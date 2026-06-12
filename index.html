@@ -645,8 +645,17 @@ async function loadData(){
     document.getElementById('sheet-lnk').href=`https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/edit`;
     document.getElementById('loading-screen').classList.add('gone');
     document.getElementById('app').classList.add('show');
-    // Show participant selection modal if no one selected yet
-    if(!S.selectedPart){
+    // Check localStorage for returning user
+    const saved = localStorage.getItem('quiniela_participant');
+    const validSaved = saved && S.participants.find(p => p.name === saved);
+    if(validSaved && !S.selectedPart){
+      // Pre-select and skip modal
+      document.getElementById('select-modal').classList.add('gone');
+      selectPart(saved);
+      switchTab('tab-puntuacion', document.querySelector('.tab-btn.active'));
+      renderPuntuacion();
+    } else if(!S.selectedPart){
+      // First time — show modal
       document.getElementById('select-modal').classList.remove('gone');
     } else {
       document.getElementById('select-modal').classList.add('gone');
@@ -716,20 +725,27 @@ function populateSel(){
   if(msel){
     msel.innerHTML='<option value="">— Elige tu nombre —</option>';
     S.participants.forEach(p=>{const o=document.createElement('option');o.value=p.name;o.textContent=p.name;msel.appendChild(o)});
+    // Pre-select saved name if exists
+    const saved=localStorage.getItem('quiniela_participant');
+    if(saved&&S.participants.find(p=>p.name===saved)){
+      msel.value=saved;
+      document.getElementById('modal-confirm').disabled=false;
+    }
   }
 }
 
 function confirmParticipant(){
   const name=document.getElementById('modal-part-sel').value;
   if(!name)return;
+  localStorage.setItem('quiniela_participant', name);
   document.getElementById('select-modal').classList.add('gone');
   selectPart(name);
-  // Default to puntuacion tab
   switchTab('tab-puntuacion', document.querySelector('.tab-btn.active'));
   renderPuntuacion();
 }
 function selectPart(name){
   S.selectedPart=name;
+  if(name) localStorage.setItem('quiniela_participant', name);
   document.getElementById('part-sel').value=name;
   document.querySelectorAll('.rc').forEach(c=>c.classList.remove('on'));
   const rc=document.getElementById(`rc-${name}`);
