@@ -1059,17 +1059,17 @@ function renderAnalytics() {
     predResults.forEach(r=>resCnt[r]++);
     const maxVotes=Math.max(resCnt.L,resCnt.E,resCnt.V);
     const splitScore=1-maxVotes/n;
-    const scoreDisp=(stddev(ls)+stddev(vs))/2;
-    const disparity=splitScore*0.6+Math.min(scoreDisp/2,1)*0.4;
     const combos=new Set(parts.map(p=>{const pr=(S.preds[m.id]||{})[p.name];return pr&&pr.l!==null?`${pr.l}-${pr.v}`:null}).filter(Boolean));
-    return {m,resCnt,n,splitScore,scoreDisp,disparity,uniqueCombos:combos.size,label:`${m.local} vs ${m.visitante}`};
+    // Prioritize unique scorelines (marcadores distintos) — 70% weight; result split — 30%
+    const uniqueScore=Math.min((combos.size-1)/Math.max(n-1,1),1);
+    const disparity=uniqueScore*0.7+splitScore*0.3;
+    return {m,resCnt,n,splitScore,disparity,uniqueCombos:combos.size,label:`${m.local} vs ${m.visitante}`};
   }).filter(Boolean);
 
   const byDisp=[...allMatchDisp].sort((a,b)=>b.disparity-a.disparity);
-  // Take top/bot 10 by disparity, then sort each group by fecha ascending
+  // Sort top 10 by fecha ascending
   const sortByFecha=(arr)=>[...arr].sort((a,b)=>a.m.fecha.localeCompare(b.m.fecha)||(a.m.hora||'').localeCompare(b.m.hora||''));
   const top10disp=sortByFecha(byDisp.slice(0,10));
-  const bot10disp=sortByFecha(byDisp.slice(-10).reverse());
 
   // ── Points per played match ──
   const matchStats=played.map(m=>{
@@ -1147,13 +1147,7 @@ function renderAnalytics() {
           <tbody>${top10disp.map((s,i)=>levRow(s,i,true)).join('')}</tbody>
         </table>
       </div>
-      <div class="an-section">
-        <div class="an-section-title">😴 Top 10 partidos irrelevantes (menor disparidad)</div>
-        <table class="an-table">
-          <thead><tr><th class="an-th-left">Fecha / Hora</th><th title="Marcadores distintos">Mkd</th><th>L / E / V</th></tr></thead>
-          <tbody>${bot10disp.map((s,i)=>levRow(s,i,false)).join('')}</tbody>
-        </table>
-      </div>
+
     </div>
 
     <div class="an-two-col">
