@@ -1141,7 +1141,7 @@ function renderAnalytics() {
   wrap.innerHTML = `
     <div class="an-two-col">
       <div class="an-section">
-        <div class="an-section-title">⚡ Top 10 partidos clave (mayor disparidad)</div>
+        <div class="an-section-title">Top 10 partidos clave (mayor disparidad)</div>
         <table class="an-table">
           <thead><tr><th class="an-th-left">Fecha / Hora</th><th title="Marcadores distintos">Mkd</th><th>L / E / V</th></tr></thead>
           <tbody>${top10disp.map((s,i)=>levRow(s,i,true)).join('')}</tbody>
@@ -1152,14 +1152,14 @@ function renderAnalytics() {
 
     <div class="an-two-col">
       <div class="an-section">
-        <div class="an-section-title">🔥 Partidos con más puntos (promedio)</div>
+        <div class="an-section-title">Partidos con más puntos (promedio)</div>
         <table class="an-table">
           <thead><tr><th class="an-th-left">Partido</th><th>Prom.</th></tr></thead>
           <tbody>${top3pts.map((s,i)=>matchRow(s,i)).join('')}</tbody>
         </table>
       </div>
       <div class="an-section">
-        <div class="an-section-title">❄️ Partidos con menos puntos (promedio)</div>
+        <div class="an-section-title">Partidos con menos puntos (promedio)</div>
         <table class="an-table">
           <thead><tr><th class="an-th-left">Partido</th><th>Prom.</th></tr></thead>
           <tbody>${bot3pts.map((s,i)=>matchRow(s,i)).join('')}</tbody>
