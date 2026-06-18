@@ -326,6 +326,142 @@ tr.row-b .td-mini{background:var(--bg-score-b)}
 .bolsa-monto{font-weight:bold;color:var(--gold);text-align:right;font-family:Verdana,sans-serif;width:90px;white-space:nowrap}
 .bolsa-loading{text-align:center;color:var(--txt-gray);font-size:12px;padding:10px}
 
+/* ── EVOLUCIÓN TAB ── */
+function renderEvolucion() {
+  const wrap  = document.getElementById('evo-svg-wrap');
+  const title = document.getElementById('evo-title');
+  const sel   = S.selectedPart;
+
+  if (!sel) {
+    wrap.innerHTML = '<div style="text-align:center;color:var(--txt-gray);padding:30px;font-size:12px">Selecciona un participante para ver su evolución.</div>';
+    return;
+  }
+
+  const played = S.matches.filter(m => m.real_l !== null);
+  if (!played.length) {
+    wrap.innerHTML = '<div style="text-align:center;color:var(--txt-gray);padding:30px;font-size:12px">Aún no hay partidos jugados.</div>';
+    return;
+  }
+
+  title.textContent = 'Evolución en el Ranking — ' + sel;
+
+  // ── Compute cumulative points per participant after each match ──
+  const parts = S.participants;
+  const nParts = parts.length;
+
+  // cumPts[name] = running total
+  const cumPts = {};
+  parts.forEach(p => cumPts[p.name] = 0);
+
+  // For each played match, compute cumulative points and derive rank
+  // dataPoints[i] = rank of sel after match i
+  const dataPoints = []; // {matchIdx, rank, pts, label}
+  const allRankHistory = {}; // name → array of ranks
+  parts.forEach(p => allRankHistory[p.name] = []);
+
+  played.forEach((m, i) => {
+    // Add pts for this match
+    parts.forEach(p => {
+      const pr = (S.preds[m.id]||{})[p.name];
+      if (pr && pr.l !== null) {
+        cumPts[p.name] += (calcPoints(m.real_l, m.real_v, pr.l, pr.v) || 0);
+      }
+    });
+
+    // Rank all participants by cumulative pts (desc), ties = same rank
+    const sorted = [...parts].map(p => ({name:p.name, pts:cumPts[p.name]}))
+                              .sort((a,b) => b.pts - a.pts);
+    let rank = 1;
+    sorted.forEach((p, idx) => {
+      if (idx > 0 && p.pts < sorted[idx-1].pts) rank = idx + 1;
+      allRankHistory[p.name].push(rank);
+    });
+
+    const selRank = allRankHistory[sel][allRankHistory[sel].length - 1];
+    dataPoints.push({
+      idx: i,
+      rank: selRank,
+      pts: cumPts[sel],
+      label: m.fecha.substring(5) + ' ' + m.local.substring(0,3) + '-' + m.visitante.substring(0,3)
+    });
+  });
+
+  // ── SVG dimensions ──
+  const PAD_L = 36, PAD_R = 16, PAD_T = 20, PAD_B = 60;
+  const COL_W = Math.max(20, Math.min(36, Math.floor(600 / dataPoints.length)));
+  const W     = PAD_L + dataPoints.length * COL_W + PAD_R;
+  const H     = 260;
+  const CHART_H = H - PAD_T - PAD_B;
+
+  // Scale: rank 1 at top, nParts at bottom
+  function yFor(rank) {
+    return PAD_T + ((rank - 1) / (nParts - 1)) * CHART_H;
+  }
+  function xFor(idx) {
+    return PAD_L + idx * COL_W + COL_W / 2;
+  }
+
+  // ── Y axis gridlines and labels ──
+  let gridLines = '';
+  const ySteps = [1, Math.round(nParts * 0.25), Math.round(nParts * 0.5), Math.round(nParts * 0.75), nParts];
+  ySteps.forEach(r => {
+    const y = yFor(r);
+    gridLines += `<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+    gridLines += `<text x="${PAD_L - 4}" y="${y + 4}" text-anchor="end" font-size="9" fill="#666">${r}</text>`;
+  });
+
+  // ── Line path ──
+  const points = dataPoints.map((d,i) => `${xFor(i)},${yFor(d.rank)}`).join(' ');
+  const polyline = `<polyline points="${points}" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+  // ── Dots + labels ──
+  let dots = '';
+  let xLabels = '';
+  dataPoints.forEach((d, i) => {
+    const x = xFor(i), y = yFor(d.rank);
+    const isFirst = i === 0;
+    const isLast  = i === dataPoints.length - 1;
+    const changed = isFirst || d.rank !== dataPoints[i-1].rank;
+
+    // Dot
+    dots += `<circle cx="${x}" cy="${y}" r="${changed||isLast?4:2.5}" fill="var(--gold)" stroke="var(--bg-panel)" stroke-width="1.5"/>`;
+
+    // Rank label above dot (only on change or endpoints)
+    if (changed || isLast) {
+      dots += `<text x="${x}" y="${y - 7}" text-anchor="middle" font-size="9" font-weight="bold" fill="var(--gold)">${d.rank}°</text>`;
+    }
+
+    // X axis label (rotated)
+    xLabels += `<text x="${x}" y="${H - PAD_B + 14}" text-anchor="end" font-size="7.5" fill="#555"
+      transform="rotate(-45,${x},${H - PAD_B + 14})">${d.label}</text>`;
+  });
+
+  // ── Axis lines ──
+  const axes = `
+    <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" stroke="#333" stroke-width="1"/>
+    <line x1="${PAD_L}" y1="${H - PAD_B}" x2="${W - PAD_R}" y2="${H - PAD_B}" stroke="#333" stroke-width="1"/>`;
+
+  // ── Assemble SVG ──
+  const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+    ${axes}${gridLines}${polyline}${dots}${xLabels}
+    <text x="${PAD_L - 4}" y="${PAD_T - 6}" text-anchor="middle" font-size="8" fill="#555">Lugar</text>
+  </svg>`;
+
+  wrap.innerHTML = svg;
+
+  // ── Legend: current rank + pts ──
+  const curRank = dataPoints[dataPoints.length-1].rank;
+  const curPts  = dataPoints[dataPoints.length-1].pts;
+  document.getElementById('evo-legend').innerHTML = `
+    <div class="evo-legend-item">
+      <div class="evo-legend-dot" style="background:var(--gold)"></div>
+      <span>${sel}</span>
+    </div>
+    <div class="evo-legend-item" style="color:var(--gold);font-weight:bold">
+      Lugar actual: ${curRank}° &nbsp;|&nbsp; ${curPts} pts
+    </div>`;
+}
+
 /* ── ANALYTICS TAB ── */
 .analytics-wrap{padding:10px;max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
 .an-section{background:var(--bg-panel);border:1px solid #2A3540;overflow:hidden}
@@ -349,6 +485,17 @@ tr.row-b .td-mini{background:var(--bg-score-b)}
 .an-badge-lo{background:rgba(163,207,119,.18);color:var(--pts-3)}
 .an-two-col{display:flex;gap:8px;flex-wrap:wrap}
 .an-two-col .an-section{flex:1 1 280px}
+
+/* ── EVOLUCIÓN TAB ── */
+.evo-wrap{padding:12px;max-width:700px;margin:0 auto}
+.evo-chart-box{background:var(--bg-panel);border:1px solid #2A3540;padding:14px 10px 8px;position:relative}
+.evo-title{font-family:Verdana,sans-serif;font-size:11px;font-weight:bold;color:var(--txt-dim);text-align:center;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px}
+.evo-svg-wrap{overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--bg-hdr) var(--bg-panel)}
+.evo-svg-wrap::-webkit-scrollbar{height:3px}
+.evo-svg-wrap::-webkit-scrollbar-thumb{background:var(--bg-hdr)}
+.evo-legend{display:flex;justify-content:center;gap:16px;margin-top:8px;flex-wrap:wrap;font-size:11px;color:var(--txt-dim)}
+.evo-legend-item{display:flex;align-items:center;gap:5px}
+.evo-legend-dot{width:10px;height:10px;border-radius:50%}
 
 footer{text-align:center;padding:10px;font-size:10px;color:var(--txt-gray);border-top:1px solid #2A3540;margin-top:8px}
 footer a{color:var(--txt-dim);text-decoration:none}
@@ -451,6 +598,7 @@ footer a:hover{color:var(--gold)}
     <button class="tab-btn active" onclick="switchTab('tab-puntuacion',this)">🏆 Ranking</button>
     <button class="tab-btn" onclick="switchTab('tab-marcador',this)">⚽ Marcadores</button>
     <button class="tab-btn" onclick="switchTab('tab-partido',this)">🔍 Partido</button>
+    <button class="tab-btn tab-btn-icon" onclick="switchTab('tab-evolucion',this)" title="Evolución">📉</button>
     <button class="tab-btn tab-btn-icon" onclick="switchTab('tab-analytics',this)" title="Estadísticas">📈</button>
     <button class="tab-btn tab-btn-icon" onclick="switchTab('tab-reglas',this)" title="Reglas">📋</button>
   </div>
@@ -521,6 +669,19 @@ footer a:hover{color:var(--gold)}
     </div>
 
     <!-- ══ TAB 4: ANALYTICS ══ -->
+    <!-- ══ TAB: EVOLUCIÓN ══ -->
+    <div class="tab-pane" id="tab-evolucion">
+      <div class="evo-wrap">
+        <div class="evo-chart-box">
+          <div class="evo-title" id="evo-title">Evolución en el Ranking</div>
+          <div class="evo-svg-wrap" id="evo-svg-wrap">
+            <div style="text-align:center;color:var(--txt-gray);padding:30px;font-size:12px">Selecciona un participante para ver su evolución.</div>
+          </div>
+          <div class="evo-legend" id="evo-legend"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="tab-pane" id="tab-analytics">
       <div class="analytics-wrap" id="analytics-wrap">
         <div style="text-align:center;color:var(--txt-gray);font-size:12px;padding:20px">Cargando estadísticas…</div>
@@ -781,6 +942,7 @@ function selectPart(name){
   if(activeTab){
     if(activeTab.id==='tab-puntuacion') renderPuntuacion();
     if(activeTab.id==='tab-partido')    renderMatchDetail();
+    if(activeTab.id==='tab-evolucion')  renderEvolucion();
   }
 }
 
@@ -999,6 +1161,7 @@ function resetSim(){
   if(activeTab){
     if(activeTab.id==='tab-puntuacion') renderPuntuacion();
     if(activeTab.id==='tab-partido')    renderMatchDetail();
+    if(activeTab.id==='tab-evolucion')  renderEvolucion();
   }
 }
 
@@ -1026,10 +1189,283 @@ function switchTab(id, btn) {
   if (id === 'tab-marcador')   { buildHeaders(); renderTable(); syncHeights(); }
   if (id === 'tab-reglas')     renderReglas();
   if (id === 'tab-analytics')  renderAnalytics();
+  if (id === 'tab-evolucion')   renderEvolucion();
+}
+
+/* ── EVOLUCIÓN TAB ── */
+function renderEvolucion() {
+  const wrap  = document.getElementById('evo-svg-wrap');
+  const title = document.getElementById('evo-title');
+  const sel   = S.selectedPart;
+
+  if (!sel) {
+    wrap.innerHTML = '<div style="text-align:center;color:var(--txt-gray);padding:30px;font-size:12px">Selecciona un participante para ver su evolución.</div>';
+    return;
+  }
+
+  const played = S.matches.filter(m => m.real_l !== null);
+  if (!played.length) {
+    wrap.innerHTML = '<div style="text-align:center;color:var(--txt-gray);padding:30px;font-size:12px">Aún no hay partidos jugados.</div>';
+    return;
+  }
+
+  title.textContent = 'Evolución en el Ranking — ' + sel;
+
+  // ── Compute cumulative points per participant after each match ──
+  const parts = S.participants;
+  const nParts = parts.length;
+
+  // cumPts[name] = running total
+  const cumPts = {};
+  parts.forEach(p => cumPts[p.name] = 0);
+
+  // For each played match, compute cumulative points and derive rank
+  // dataPoints[i] = rank of sel after match i
+  const dataPoints = []; // {matchIdx, rank, pts, label}
+  const allRankHistory = {}; // name → array of ranks
+  parts.forEach(p => allRankHistory[p.name] = []);
+
+  played.forEach((m, i) => {
+    // Add pts for this match
+    parts.forEach(p => {
+      const pr = (S.preds[m.id]||{})[p.name];
+      if (pr && pr.l !== null) {
+        cumPts[p.name] += (calcPoints(m.real_l, m.real_v, pr.l, pr.v) || 0);
+      }
+    });
+
+    // Rank all participants by cumulative pts (desc), ties = same rank
+    const sorted = [...parts].map(p => ({name:p.name, pts:cumPts[p.name]}))
+                              .sort((a,b) => b.pts - a.pts);
+    let rank = 1;
+    sorted.forEach((p, idx) => {
+      if (idx > 0 && p.pts < sorted[idx-1].pts) rank = idx + 1;
+      allRankHistory[p.name].push(rank);
+    });
+
+    const selRank = allRankHistory[sel][allRankHistory[sel].length - 1];
+    dataPoints.push({
+      idx: i,
+      rank: selRank,
+      pts: cumPts[sel],
+      label: m.fecha.substring(5) + ' ' + m.local.substring(0,3) + '-' + m.visitante.substring(0,3)
+    });
+  });
+
+  // ── SVG dimensions ──
+  const PAD_L = 36, PAD_R = 16, PAD_T = 20, PAD_B = 60;
+  const COL_W = Math.max(20, Math.min(36, Math.floor(600 / dataPoints.length)));
+  const W     = PAD_L + dataPoints.length * COL_W + PAD_R;
+  const H     = 260;
+  const CHART_H = H - PAD_T - PAD_B;
+
+  // Scale: rank 1 at top, nParts at bottom
+  function yFor(rank) {
+    return PAD_T + ((rank - 1) / (nParts - 1)) * CHART_H;
+  }
+  function xFor(idx) {
+    return PAD_L + idx * COL_W + COL_W / 2;
+  }
+
+  // ── Y axis gridlines and labels ──
+  let gridLines = '';
+  const ySteps = [1, Math.round(nParts * 0.25), Math.round(nParts * 0.5), Math.round(nParts * 0.75), nParts];
+  ySteps.forEach(r => {
+    const y = yFor(r);
+    gridLines += `<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+    gridLines += `<text x="${PAD_L - 4}" y="${y + 4}" text-anchor="end" font-size="9" fill="#666">${r}</text>`;
+  });
+
+  // ── Line path ──
+  const points = dataPoints.map((d,i) => `${xFor(i)},${yFor(d.rank)}`).join(' ');
+  const polyline = `<polyline points="${points}" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+  // ── Dots + labels ──
+  let dots = '';
+  let xLabels = '';
+  dataPoints.forEach((d, i) => {
+    const x = xFor(i), y = yFor(d.rank);
+    const isFirst = i === 0;
+    const isLast  = i === dataPoints.length - 1;
+    const changed = isFirst || d.rank !== dataPoints[i-1].rank;
+
+    // Dot
+    dots += `<circle cx="${x}" cy="${y}" r="${changed||isLast?4:2.5}" fill="var(--gold)" stroke="var(--bg-panel)" stroke-width="1.5"/>`;
+
+    // Rank label above dot (only on change or endpoints)
+    if (changed || isLast) {
+      dots += `<text x="${x}" y="${y - 7}" text-anchor="middle" font-size="9" font-weight="bold" fill="var(--gold)">${d.rank}°</text>`;
+    }
+
+    // X axis label (rotated)
+    xLabels += `<text x="${x}" y="${H - PAD_B + 14}" text-anchor="end" font-size="7.5" fill="#555"
+      transform="rotate(-45,${x},${H - PAD_B + 14})">${d.label}</text>`;
+  });
+
+  // ── Axis lines ──
+  const axes = `
+    <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" stroke="#333" stroke-width="1"/>
+    <line x1="${PAD_L}" y1="${H - PAD_B}" x2="${W - PAD_R}" y2="${H - PAD_B}" stroke="#333" stroke-width="1"/>`;
+
+  // ── Assemble SVG ──
+  const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+    ${axes}${gridLines}${polyline}${dots}${xLabels}
+    <text x="${PAD_L - 4}" y="${PAD_T - 6}" text-anchor="middle" font-size="8" fill="#555">Lugar</text>
+  </svg>`;
+
+  wrap.innerHTML = svg;
+
+  // ── Legend: current rank + pts ──
+  const curRank = dataPoints[dataPoints.length-1].rank;
+  const curPts  = dataPoints[dataPoints.length-1].pts;
+  document.getElementById('evo-legend').innerHTML = `
+    <div class="evo-legend-item">
+      <div class="evo-legend-dot" style="background:var(--gold)"></div>
+      <span>${sel}</span>
+    </div>
+    <div class="evo-legend-item" style="color:var(--gold);font-weight:bold">
+      Lugar actual: ${curRank}° &nbsp;|&nbsp; ${curPts} pts
+    </div>`;
 }
 
 /* ── ANALYTICS TAB ── */
 
+
+/* ── EVOLUCIÓN TAB ── */
+function renderEvolucion() {
+  const wrap  = document.getElementById('evo-svg-wrap');
+  const title = document.getElementById('evo-title');
+  const sel   = S.selectedPart;
+
+  if (!sel) {
+    wrap.innerHTML = '<div style="text-align:center;color:var(--txt-gray);padding:30px;font-size:12px">Selecciona un participante para ver su evolución.</div>';
+    return;
+  }
+
+  const played = S.matches.filter(m => m.real_l !== null);
+  if (!played.length) {
+    wrap.innerHTML = '<div style="text-align:center;color:var(--txt-gray);padding:30px;font-size:12px">Aún no hay partidos jugados.</div>';
+    return;
+  }
+
+  title.textContent = 'Evolución en el Ranking — ' + sel;
+
+  // ── Compute cumulative points per participant after each match ──
+  const parts = S.participants;
+  const nParts = parts.length;
+
+  // cumPts[name] = running total
+  const cumPts = {};
+  parts.forEach(p => cumPts[p.name] = 0);
+
+  // For each played match, compute cumulative points and derive rank
+  // dataPoints[i] = rank of sel after match i
+  const dataPoints = []; // {matchIdx, rank, pts, label}
+  const allRankHistory = {}; // name → array of ranks
+  parts.forEach(p => allRankHistory[p.name] = []);
+
+  played.forEach((m, i) => {
+    // Add pts for this match
+    parts.forEach(p => {
+      const pr = (S.preds[m.id]||{})[p.name];
+      if (pr && pr.l !== null) {
+        cumPts[p.name] += (calcPoints(m.real_l, m.real_v, pr.l, pr.v) || 0);
+      }
+    });
+
+    // Rank all participants by cumulative pts (desc), ties = same rank
+    const sorted = [...parts].map(p => ({name:p.name, pts:cumPts[p.name]}))
+                              .sort((a,b) => b.pts - a.pts);
+    let rank = 1;
+    sorted.forEach((p, idx) => {
+      if (idx > 0 && p.pts < sorted[idx-1].pts) rank = idx + 1;
+      allRankHistory[p.name].push(rank);
+    });
+
+    const selRank = allRankHistory[sel][allRankHistory[sel].length - 1];
+    dataPoints.push({
+      idx: i,
+      rank: selRank,
+      pts: cumPts[sel],
+      label: m.fecha.substring(5) + ' ' + m.local.substring(0,3) + '-' + m.visitante.substring(0,3)
+    });
+  });
+
+  // ── SVG dimensions ──
+  const PAD_L = 36, PAD_R = 16, PAD_T = 20, PAD_B = 60;
+  const COL_W = Math.max(20, Math.min(36, Math.floor(600 / dataPoints.length)));
+  const W     = PAD_L + dataPoints.length * COL_W + PAD_R;
+  const H     = 260;
+  const CHART_H = H - PAD_T - PAD_B;
+
+  // Scale: rank 1 at top, nParts at bottom
+  function yFor(rank) {
+    return PAD_T + ((rank - 1) / (nParts - 1)) * CHART_H;
+  }
+  function xFor(idx) {
+    return PAD_L + idx * COL_W + COL_W / 2;
+  }
+
+  // ── Y axis gridlines and labels ──
+  let gridLines = '';
+  const ySteps = [1, Math.round(nParts * 0.25), Math.round(nParts * 0.5), Math.round(nParts * 0.75), nParts];
+  ySteps.forEach(r => {
+    const y = yFor(r);
+    gridLines += `<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+    gridLines += `<text x="${PAD_L - 4}" y="${y + 4}" text-anchor="end" font-size="9" fill="#666">${r}</text>`;
+  });
+
+  // ── Line path ──
+  const points = dataPoints.map((d,i) => `${xFor(i)},${yFor(d.rank)}`).join(' ');
+  const polyline = `<polyline points="${points}" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+  // ── Dots + labels ──
+  let dots = '';
+  let xLabels = '';
+  dataPoints.forEach((d, i) => {
+    const x = xFor(i), y = yFor(d.rank);
+    const isFirst = i === 0;
+    const isLast  = i === dataPoints.length - 1;
+    const changed = isFirst || d.rank !== dataPoints[i-1].rank;
+
+    // Dot
+    dots += `<circle cx="${x}" cy="${y}" r="${changed||isLast?4:2.5}" fill="var(--gold)" stroke="var(--bg-panel)" stroke-width="1.5"/>`;
+
+    // Rank label above dot (only on change or endpoints)
+    if (changed || isLast) {
+      dots += `<text x="${x}" y="${y - 7}" text-anchor="middle" font-size="9" font-weight="bold" fill="var(--gold)">${d.rank}°</text>`;
+    }
+
+    // X axis label (rotated)
+    xLabels += `<text x="${x}" y="${H - PAD_B + 14}" text-anchor="end" font-size="7.5" fill="#555"
+      transform="rotate(-45,${x},${H - PAD_B + 14})">${d.label}</text>`;
+  });
+
+  // ── Axis lines ──
+  const axes = `
+    <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" stroke="#333" stroke-width="1"/>
+    <line x1="${PAD_L}" y1="${H - PAD_B}" x2="${W - PAD_R}" y2="${H - PAD_B}" stroke="#333" stroke-width="1"/>`;
+
+  // ── Assemble SVG ──
+  const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+    ${axes}${gridLines}${polyline}${dots}${xLabels}
+    <text x="${PAD_L - 4}" y="${PAD_T - 6}" text-anchor="middle" font-size="8" fill="#555">Lugar</text>
+  </svg>`;
+
+  wrap.innerHTML = svg;
+
+  // ── Legend: current rank + pts ──
+  const curRank = dataPoints[dataPoints.length-1].rank;
+  const curPts  = dataPoints[dataPoints.length-1].pts;
+  document.getElementById('evo-legend').innerHTML = `
+    <div class="evo-legend-item">
+      <div class="evo-legend-dot" style="background:var(--gold)"></div>
+      <span>${sel}</span>
+    </div>
+    <div class="evo-legend-item" style="color:var(--gold);font-weight:bold">
+      Lugar actual: ${curRank}° &nbsp;|&nbsp; ${curPts} pts
+    </div>`;
+}
 
 /* ── ANALYTICS TAB ── */
 function renderAnalytics() {
@@ -1141,7 +1577,7 @@ function renderAnalytics() {
   wrap.innerHTML = `
     <div class="an-two-col">
       <div class="an-section">
-        <div class="an-section-title">Top 10 partidos clave (mayor disparidad)</div>
+        <div class="an-section-title">⚡ Top 10 partidos clave (mayor disparidad)</div>
         <table class="an-table">
           <thead><tr><th class="an-th-left">Fecha / Hora</th><th title="Marcadores distintos">Mkd</th><th>L / E / V</th></tr></thead>
           <tbody>${top10disp.map((s,i)=>levRow(s,i,true)).join('')}</tbody>
@@ -1152,14 +1588,14 @@ function renderAnalytics() {
 
     <div class="an-two-col">
       <div class="an-section">
-        <div class="an-section-title">Partidos con más puntos (promedio)</div>
+        <div class="an-section-title">🔥 Partidos con más puntos (promedio)</div>
         <table class="an-table">
           <thead><tr><th class="an-th-left">Partido</th><th>Prom.</th></tr></thead>
           <tbody>${top3pts.map((s,i)=>matchRow(s,i)).join('')}</tbody>
         </table>
       </div>
       <div class="an-section">
-        <div class="an-section-title">Partidos con menos puntos (promedio)</div>
+        <div class="an-section-title">❄️ Partidos con menos puntos (promedio)</div>
         <table class="an-table">
           <thead><tr><th class="an-th-left">Partido</th><th>Prom.</th></tr></thead>
           <tbody>${bot3pts.map((s,i)=>matchRow(s,i)).join('')}</tbody>
