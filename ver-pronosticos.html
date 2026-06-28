@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ver Pronósticos – Mundial 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --azul:       #3B82F6;
+    --azul-dark:  #1D4ED8;
+    --fondo:      #0D1117;
+    --card:       #161B22;
+    --borde:      #30363D;
+    --texto:      #E6EDF3;
+    --muted:      #8B949E;
+    --amarillo:   #F0B429;
+    --verde:      #22C55E;
+    --rojo:       #D62828;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--fondo);
+    color: var(--texto);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  header {
+    background: linear-gradient(135deg, #0D1117 0%, #161B22 50%, #0D1117 100%);
+    border-bottom: 1px solid var(--borde);
+    padding: 24px;
+    text-align: center;
+    position: relative;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 80% at 50% -10%, rgba(59,130,246,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(26px, 5vw, 42px);
+    letter-spacing: 3px;
+    color: #fff;
+  }
+  header h1 span { color: var(--azul); }
+  header p { color: var(--muted); font-size: 12px; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+
+  main { max-width: 720px; margin: 0 auto; padding: 28px 16px 60px; }
+
+  /* ── SELECTOR ── */
+  .selector-box {
+    background: var(--card);
+    border: 1px solid var(--azul);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 28px;
+    box-shadow: 0 0 20px rgba(59,130,246,0.08);
+  }
+  .selector-box label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  select#nombre-select {
+    width: 100%;
+    background: var(--fondo);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    color: var(--texto);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 10px 14px;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  select#nombre-select:focus { border-color: var(--azul); }
+  .meta { margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .meta strong { color: var(--texto); }
+
+  /* ── LOADING / EMPTY ── */
+  .state-msg {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 0;
+    font-size: 13px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 2px solid var(--borde);
+    border-top-color: var(--azul);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-bottom: 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── ROUND SECTION ── */
+  .round-section { margin-bottom: 28px; }
+  .round-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--borde);
+  }
+  .round-badge {
+    background: var(--azul);
+    color: #fff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 12px;
+    letter-spacing: 2px;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+  .round-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+
+  /* ── MATCH ROW ── */
+  .match-row {
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .match-row .date {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    min-width: 70px;
+    flex-shrink: 0;
+  }
+  .match-teams-view {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
+  }
+  .team-view {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--texto);
+  }
+  .team-view img {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--borde);
+  }
+  .score-view {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: var(--texto);
+    background: var(--fondo);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 2px 10px;
+    min-width: 60px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .score-view.empty { color: var(--muted); }
+  .pen-badge {
+    font-size: 10px;
+    background: rgba(240,180,41,0.15);
+    border: 1px solid rgba(240,180,41,0.35);
+    color: var(--amarillo);
+    border-radius: 6px;
+    padding: 2px 7px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VER <span>PRONÓSTICOS</span></h1>
+  <p>Mundial 2026 · Fase Eliminatoria</p>
+</header>
+
+<main>
+
+  <div class="selector-box">
+    <label for="nombre-select">Selecciona un participante</label>
+    <select id="nombre-select">
+      <option value="">— Cargando participantes… —</option>
+    </select>
+    <div class="meta" id="meta" style="display:none">
+      Enviado el <strong id="meta-fecha"></strong>
+    </div>
+  </div>
+
+  <div id="content">
+    <div class="state-msg">Selecciona un participante para ver sus pronósticos.</div>
+  </div>
+
+</main>
+
+<script>
+// ── CONFIGURACIÓN ──────────────────────────────────────────────
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyPEb-HsfXO17XpbTwZEq7eo022uCLea8boT9VUr_W5_jePkxdK5lKzSF31cJPOI9RCnw/exec';
+
+// ── DATOS DEL BRACKET ──────────────────────────────────────────
+const FLAG = {
+  'Sudáfrica':'za','Canadá':'ca','Brasil':'br','Japón':'jp',
+  'Alemania':'de','Paraguay':'py','Países Bajos':'nl','Marruecos':'ma',
+  'Costa de Marfil':'ci','Noruega':'no','Francia':'fr','Suecia':'se',
+  'México':'mx','Ecuador':'ec','Inglaterra':'gb-eng','Congo RD':'cd',
+  'Bélgica':'be','Senegal':'sn','Estados Unidos':'us','Bosnia-Herz.':'ba',
+  'España':'es','Austria':'at','Portugal':'pt','Croacia':'hr',
+  'Suiza':'ch','Argelia':'dz','Australia':'au','Egipto':'eg',
+  'Argentina':'ar','Cabo Verde':'cv','Colombia':'co','Ghana':'gh',
+};
+
+const MATCHES = {
+  r32: [
+    { id:'r32_m1',  date:'28 Jun 14:00', ta:'Sudáfrica',      tb:'Canadá' },
+    { id:'r32_m2',  date:'29 Jun 12:00', ta:'Brasil',         tb:'Japón' },
+    { id:'r32_m3',  date:'29 Jun 15:30', ta:'Alemania',       tb:'Paraguay' },
+    { id:'r32_m4',  date:'29 Jun 20:00', ta:'Países Bajos',   tb:'Marruecos' },
+    { id:'r32_m5',  date:'30 Jun 12:00', ta:'Costa de Marfil',tb:'Noruega' },
+    { id:'r32_m6',  date:'30 Jun 16:00', ta:'Francia',        tb:'Suecia' },
+    { id:'r32_m7',  date:'30 Jun 20:00', ta:'México',         tb:'Ecuador' },
+    { id:'r32_m8',  date:'01 Jul 11:00', ta:'Inglaterra',     tb:'Congo RD' },
+    { id:'r32_m9',  date:'01 Jul 15:00', ta:'Bélgica',        tb:'Senegal' },
+    { id:'r32_m10', date:'01 Jul 19:00', ta:'Estados Unidos', tb:'Bosnia-Herz.' },
+    { id:'r32_m11', date:'02 Jul 14:00', ta:'España',         tb:'Austria' },
+    { id:'r32_m12', date:'02 Jul 18:00', ta:'Portugal',       tb:'Croacia' },
+    { id:'r32_m13', date:'02 Jul 22:00', ta:'Suiza',          tb:'Argelia' },
+    { id:'r32_m14', date:'03 Jul 13:00', ta:'Australia',      tb:'Egipto' },
+    { id:'r32_m15', date:'03 Jul 17:00', ta:'Argentina',      tb:'Cabo Verde' },
+    { id:'r32_m16', date:'03 Jul 20:30', ta:'Colombia',       tb:'Ghana' },
+  ],
+  r16: [
+    { id:'r16_m1', date:'~4-5 Jul', label:'Octavos 1 (P90)' },
+    { id:'r16_m2', date:'~5-6 Jul', label:'Octavos 2 (P91)' },
+    { id:'r16_m3', date:'~4-5 Jul', label:'Octavos 3 (P89)' },
+    { id:'r16_m4', date:'~5-6 Jul', label:'Octavos 4 (P92)' },
+    { id:'r16_m5', date:'~6-7 Jul', label:'Octavos 5 (P94)' },
+    { id:'r16_m6', date:'~6-7 Jul', label:'Octavos 6 (P93)' },
+    { id:'r16_m7', date:'~7-8 Jul', label:'Octavos 7 (P96)' },
+    { id:'r16_m8', date:'~7-8 Jul', label:'Octavos 8 (P95)' },
+  ],
+  qf: [
+    { id:'qf_m1', date:'~9 Jul',  label:'Cuartos 1 (P97)' },
+    { id:'qf_m2', date:'~10 Jul', label:'Cuartos 2 (P98)' },
+    { id:'qf_m3', date:'~9 Jul',  label:'Cuartos 3 (P99)' },
+    { id:'qf_m4', date:'~10 Jul', label:'Cuartos 4 (P100)' },
+  ],
+  sf: [
+    { id:'sf_m1', date:'~14 Jul', label:'Semifinal 1 (P101)' },
+    { id:'sf_m2', date:'~15 Jul', label:'Semifinal 2 (P102)' },
+  ],
+  tp: [
+    { id:'tp_m1', date:'~18 Jul', label:'3er Lugar' },
+  ],
+  final: [
+    { id:'final', date:'19 Jul', label:'FINAL' },
+  ],
+};
+
+// ── STATE ──────────────────────────────────────────────────────
+let allData = []; // all rows from sheet (latest per participant)
+
+// ── LOAD DATA FROM APPS SCRIPT ────────────────────────────────
+async function loadData() {
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + '?action=getAll');
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+
+    // Keep only latest submission per name
+    const byName = {};
+    for (const row of json.data) {
+      const name = row.nombre || '';
+      if (!name) continue;
+      if (!byName[name] || row.timestamp > byName[name].timestamp) {
+        byName[name] = row;
+      }
+    }
+    allData = Object.values(byName).sort((a,b) => a.nombre.localeCompare(b.nombre));
+
+    const sel = document.getElementById('nombre-select');
+    sel.innerHTML = '<option value="">— Selecciona tu nombre —</option>';
+    allData.forEach(row => {
+      const opt = document.createElement('option');
+      opt.value = row.nombre;
+      opt.textContent = row.nombre;
+      sel.appendChild(opt);
+    });
+
+  } catch (err) {
+    document.getElementById('nombre-select').innerHTML =
+      '<option value="">Error al cargar datos</option>';
+    document.getElementById('content').innerHTML =
+      `<div class="state-msg">⚠ No se pudo conectar con el servidor.<br><small>${err.message}</small></div>`;
+  }
+}
+
+// ── RENDER PICKS ──────────────────────────────────────────────
+function flagImg(team) {
+  const code = FLAG[team];
+  if (!code) return '';
+  return `<img src="https://flagcdn.com/${code}.svg" alt="${team}">`;
+}
+
+function scoreBlock(d, gaKey, gbKey, penKey, ta, tb) {
+  const ga = d[gaKey] !== undefined && d[gaKey] !== '' ? d[gaKey] : null;
+  const gb = d[gbKey] !== undefined && d[gbKey] !== '' ? d[gbKey] : null;
+  const pen = d[penKey] || '';
+  const isEmpty = ga === null && gb === null;
+
+  const scoreText = isEmpty ? '? – ?' : `${ga} – ${gb}`;
+  const scoreClass = isEmpty ? 'score-view empty' : 'score-view';
+  const penHtml = pen ? `<span class="pen-badge">Penales: ${pen}</span>` : '';
+
+  const teamA = ta || '?';
+  const teamB = tb || '?';
+
+  return `
+    <div class="match-row">
+      <span class="date">${d._date || ''}</span>
+      <div class="match-teams-view">
+        <div class="team-view">${flagImg(teamA)}<span>${teamA}</span></div>
+        <div class="${scoreClass}">${scoreText}</div>
+        <div class="team-view"><span>${teamB}</span>${flagImg(teamB)}</div>
+      </div>
+      ${penHtml}
+    </div>`;
+}
+
+function renderPicks(row) {
+  let html = '';
+
+  // R32
+  html += `<div class="round-section">
+    <div class="round-header">
+      <span class="round-badge">R32</span>
+      <span class="round-title">RONDA DE 32</span>
+    </div>`;
+  for (const m of MATCHES.r32) {
+    const r = { ...row, _date: m.date };
+    html += scoreBlock(r, m.id+'_a', m.id+'_b', m.id+'_pen', m.ta, m.tb);
+  }
+  html += `</div>`;
+
+  // Rounds with dynamic teams (R16, QF, SF, TP, Final)
+  const dynRounds = [
+    { key:'r16', badge:'R16', title:'OCTAVOS DE FINAL',  ga:'_ga', gb:'_gb' },
+    { key:'qf',  badge:'QF',  title:'CUARTOS DE FINAL',  ga:'_ga', gb:'_gb' },
+    { key:'sf',  badge:'SF',  title:'SEMIFINALES',        ga:'_ga', gb:'_gb' },
+    { key:'tp',  badge:'3°',  title:'TERCER LUGAR',       ga:'_ga', gb:'_gb' },
+    { key:'final',badge:'🏆', title:'FINAL',              ga:'_ga', gb:'_gb' },
+  ];
+
+  for (const rnd of dynRounds) {
+    html += `<div class="round-section">
+      <div class="round-header">
+        <span class="round-badge" ${rnd.key==='final'?'style="background:var(--amarillo);color:#000"':''}>${rnd.badge}</span>
+        <span class="round-title" ${rnd.key==='final'?'style="color:var(--amarillo)"':''}>${rnd.title}</span>
+      </div>`;
+    for (const m of MATCHES[rnd.key]) {
+      const r = { ...row, _date: m.date };
+      html += scoreBlock(r, m.id+rnd.ga, m.id+rnd.gb, m.id+'_pen', null, null);
+      // For dynamic rounds replace the "?" labels with the date/label
+      // (teams unknown at bracket stage — just show score)
+      html = html.replace(
+        `<div class="team-view">${flagImg(null)}<span>?</span></div>`,
+        `<div class="team-view" style="color:var(--muted);font-size:11px">${m.label || ''}</div>`
+      );
+    }
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+// ── EVENT: name selected ──────────────────────────────────────
+document.getElementById('nombre-select').addEventListener('change', function() {
+  const name = this.value;
+  const meta = document.getElementById('meta');
+  const content = document.getElementById('content');
+
+  if (!name) {
+    meta.style.display = 'none';
+    content.innerHTML = '<div class="state-msg">Selecciona un participante para ver sus pronósticos.</div>';
+    return;
+  }
+
+  const row = allData.find(r => r.nombre === name);
+  if (!row) {
+    content.innerHTML = '<div class="state-msg">No se encontraron datos.</div>';
+    return;
+  }
+
+  // Show timestamp
+  meta.style.display = 'block';
+  const ts = new Date(row.timestamp);
+  document.getElementById('meta-fecha').textContent =
+    ts.toLocaleDateString('es-MX', { day:'2-digit', month:'short' }) + ' ' +
+    ts.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+
+  content.innerHTML = renderPicks(row);
+});
+
+// ── INIT ──────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
